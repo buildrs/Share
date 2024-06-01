@@ -259,135 +259,93 @@ export default function CadView({
 
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
-    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ?
+    const ifcUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
                    filepath : await getFinalUrl(filepath, accessToken)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
 
-    let loadedModel
-    if (!isOpfsAvailable) {
-      // fallback to loadIfcUrl
-      loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !isCamHashSet,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
-    } else if (uploadedFile) {
-      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
+    const onProgress = (progressEvent) => {
+      if (Number.isFinite(progressEvent.loaded)) {
+        const loadedBytes = progressEvent.loaded
+        // eslint-disable-next-line no-magic-numbers
+        const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+        setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+        debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
       }
+    }
 
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          true, // ignore current camera for new load
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-      // TODO(nickcastel50): need a more permanent way to
-      // prevent redirect here for bundled ifc files
-    } else if (ifcURL === '/index.ifc') {
-      const file = await downloadToOPFS(
+    const onError = (error) => {
+      debug().log('CadView#loadIfc$onError: ', error)
+      setIsModelLoading(false)
+      setSnackMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+    }
+
+    let file
+    let fitToFrame = !isCamHashSet
+    let loadedModel
+    if (isOpfsAvailable) {
+      if (uploadedFile) {
+        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
+        // There's never a camera URL param for an uploadedFile to always fitToFrame
+        fitToFrame = true
+      } else if (ifcUrl === '/index.ifc') {
+        // TODO(nickcastel50): need a more permanent way to
+        // prevent redirect here for bundled ifc files
+        file = await downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
-          ifcURL,
+          ifcUrl,
           'index.ifc',
           'bldrs-ai',
           'BldrsLocalStorage',
           'V1',
           'Projects',
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setOpfsFile(file)
+          onProgress)
       } else {
-        debug().error('Retrieved object is not of type File.')
+        // TODO(pablo): probably already available in this scope, or use
+        // parseGitHubRepositoryURL instead.
+        const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
+        const commitHash = isPublic ?
+              await getLatestCommitHash(owner, repo, filePath, '', branch) :
+              await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
+
+        if (commitHash === null) {
+          // downloadToOpfs below will error out as well.
+          debug().error(
+            `Error obtaining commit hash for: ` +
+              `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
+              `accessToken (present?):${accessToken ? 'true' : 'false'}`)
+        }
+
+        file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcUrl,
+          filePath,
+          commitHash,
+          owner,
+          repo,
+          branch,
+          onProgress)
       }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !isCamHashSet,
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
-    } else {
-      // TODO(pablo): probably already available in this scope, or use
-      // parseGitHubRepositoryURL instead.
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-      const commitHash = isPublic ?
-            await getLatestCommitHash(owner, repo, filePath, '', branch) :
-            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
-
-      if (commitHash === null) {
-        // downloadToOpfs below will error out as well.
-        debug().error(
-          `Error obtaining commit hash for: ` +
-            `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
-            `accessToken (present?):${accessToken ? 'true' : 'false'}`)
-      }
-
-      const file = await downloadToOPFS(
-        navigate,
-        appPrefix,
-        handleBeforeUnload,
-        ifcURL,
-        filePath,
-        commitHash,
-        owner,
-        repo,
-        branch,
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.receivedLength)) {
-            const loadedBytes = progressEvent.receivedLength
-            // eslint-disable-next-line no-magic-numbers
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        })
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-        file,
-        !isCamHashSet,
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsModelLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
-        }, customViewSettings)
     }
+
+    if (file) {
+      if (file instanceof File) {
+        setOpfsFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+      loadedModel = await viewer.loadIfcFile(file, fitToFrame, onError, customViewSettings)
+    } else {
+      // Fallback to load from origin if not found locally
+      loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
+    }
+
+    // This may not have been called by onError yet.
+    setIsModelLoading(false)
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -399,7 +357,7 @@ export default function CadView({
       // always be 0.
       loadedModel.modelID = 0
       setModel(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcURL)
+      updateLoadedFileInfo(uploadedFile, ifcUrl)
 
       await viewer.isolator.setModel(loadedModel)
 
