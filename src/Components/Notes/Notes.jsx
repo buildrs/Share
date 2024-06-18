@@ -29,7 +29,6 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
-
   const [hasError, setHasError] = useState(false)
 
   const {user} = useAuth0()

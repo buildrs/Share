@@ -11,6 +11,7 @@ import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
@@ -23,6 +24,7 @@ import ShareIcon from '../../assets/icons/Share.svg'
  */
 export default function NoteFooter({
   accessToken,
+  deleteComment,
   editMode,
   embeddedCameras,
   id,
@@ -63,13 +65,14 @@ export default function NoteFooter({
       '_blank')
   }
 
+
   return (
     <CardActions>
       {isNote &&
        <TooltipIconButton
          title='Open in Github'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={openGithubIssue}
          icon={<GitHubIcon className='icon-share'/>}
          aboutInfo={false}
@@ -80,7 +83,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Show the camera view'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={onClickCamera}
          icon={<CameraIcon className='icon-share'/>}
          aboutInfo={false}
@@ -90,7 +93,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Share'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={() => {
            onClickShare()
            setShareIssue(!shareIssue)
@@ -113,7 +116,7 @@ export default function NoteFooter({
          <TooltipIconButton
            title='Place Mark'
            size='small'
-           placement='bottom'
+           placement='top'
            onClick={() => {
              togglePlaceMarkActive(id)
            }}
@@ -130,7 +133,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Take Screenshot'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={() => {
            setScreenshotUri(viewer.takeScreenshot())
          }}
@@ -138,40 +141,48 @@ export default function NoteFooter({
        />
       }
 
-      {editMode &&
-       <TooltipIconButton
-         title='Save'
-         placement='left'
-         icon={<CheckIcon className='icon-share'/>}
-         onClick={() => submitUpdate(repository, accessToken, id)}
-       />
-      }
-
       {isNote && !selected &&
        <TooltipIconButton
          title='Add Comment'
          size='small'
-         placement='bottom'
+         placement='top'
          selected={showCreateComment}
          onClick={selectCard}
          icon={<AddCommentOutlinedIcon className='icon-share'/>}
        />
       }
 
-      {numberOfComments > 0 && !editMode &&
-       <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-         {!selected &&
+      <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+        {editMode &&
           <TooltipIconButton
-            title='Discussion'
-            size='small'
-            placement='bottom'
-            onClick={selectCard}
-            icon={<ForumOutlinedIcon className='icon-share'/>}
+            title='Save'
+            placement='top'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
           />
-         }
-         {!selected && numberOfComments}
-       </Box>
-      }
+        }
+        {!selected && numberOfComments > 0 && !editMode &&
+          <>
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='top'
+              onClick={selectCard}
+              icon={<ForumOutlinedIcon className='icon-share'/>}
+            />
+            {numberOfComments}
+          </>
+        }
+        {!isNote && user && username === user.nickname &&
+          <TooltipIconButton
+              title='Delete'
+              placement='top'
+              buttonTestId='deleteComment'
+              icon={<DeleteOutlineIcon className='icon-share'/>}
+              onClick={() => deleteComment(id)}
+          />
+        }
+      </Box>
     </CardActions>
   )
 }
