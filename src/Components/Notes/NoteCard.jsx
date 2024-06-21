@@ -9,6 +9,7 @@ import {
   updateIssue,
   // TODO(pablo): deleteComment as deleteCommentGitHub,
 } from '../../net/github/Issues'
+import {updateComment} from '../../net/github/Comments'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
@@ -71,7 +72,6 @@ export default function NoteCard({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const [showCreateComment, setShowCreateComment] = useState(false)
 
-
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
 
@@ -96,13 +96,11 @@ export default function NoteCard({
     setEditBody(body)
   }, [selectedNoteId, body])
 
-
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
     }
   }, [selected, firstCamera, cameraControls])
-
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
@@ -119,7 +117,6 @@ export default function NoteCard({
     setHashParams(window.location, HASH_PREFIX_NOTES, {id: id})
   }
 
-
   /** Moves the camera to the position specified in the url attached to the issue/comment */
   function showCameraView() {
     setCameraFromParams(firstCamera, cameraControls)
@@ -135,7 +132,6 @@ export default function NoteCard({
     setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
-
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
    *
@@ -149,7 +145,6 @@ export default function NoteCard({
     setSelectedNoteId(null)
     return res
   }
-
 
   /**
    * Delete comment from repo and remove from UI
@@ -169,15 +164,24 @@ export default function NoteCard({
     setComments(newComments)
   } */
 
-
   /** Update issue on GH, set read-only */
-  async function submitUpdate() {
+  async function updateIssueGithub() {
     const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
     const editedNote = notes.find((note) => note.id === id)
     editedNote.body = res.data.body
     setNotes(notes)
     setEditMode(false)
   }
+
+  /**
+   * Update comment in github
+   *
+   * @param {number} commentId
+   */
+    async function updateCommentGithub(commentId) {
+      await updateComment(repository, commentId, editBody, accessToken)
+      setEditMode(false)
+    }
 
 
   return (
@@ -203,7 +207,7 @@ export default function NoteCard({
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}
-      {!isNote && <NoteContent markdownContent={editBody}/>}
+      {!isNote && !editMode && <NoteContent markdownContent={editBody}/>}
       {editMode &&
        <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
@@ -226,8 +230,9 @@ export default function NoteCard({
         onClickShare={shareIssue}
         selectCard={selectCard}
         selected={selected}
-        submitUpdate={submitUpdate}
-        synched={synched}
+        setEditMode={setEditMode}
+        submitNoteUpdate={updateIssueGithub}
+        submitCommentUpdate={updateCommentGithub}
         username={username}
       />
     </Card>
