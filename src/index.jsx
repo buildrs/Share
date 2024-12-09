@@ -1,4 +1,5 @@
 import {CypressHistorySupport} from 'cypress-react-router'
+import {scan} from 'react-scan'
 import React, {ReactElement, StrictMode} from 'react'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
@@ -20,6 +21,14 @@ import '@fontsource/roboto/300.css'
 import '@fontsource/roboto/400.css'
 import '@fontsource/roboto/500.css'
 import '@fontsource/roboto/700.css'
+
+
+if (typeof window !== 'undefined') {
+  scan({
+    enabled: true,
+    log: true, // logs render info to console (default: false)
+  })
+}
 
 
 Sentry.init({

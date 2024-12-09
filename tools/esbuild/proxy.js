@@ -1,5 +1,13 @@
 import http from 'node:http'
 import https from 'node:https'
+import path from 'node:path'
+import fs from 'node:fs'
+import {fileURLToPath} from 'url'
+import {dirname} from 'path'
+
+// Define __dirname
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 /**
  * @param {string} proxiedHost The host to which traffic will be sent. E.g. localhost
@@ -12,6 +20,11 @@ export function createProxyServer(host, port, useHttps = false) {
   const requestModule = useHttps ? https : http
 
   return http.createServer((req, res) => {
+    // Attempt to serve directly from node_modules
+    if (serveFileFromNodeModules(req, res)) {
+      // File was served, no further processing needed
+      return
+    }
     // Rewrite the URL if it matches the pattern for a .wasm file
     req.url = rewriteUrl(req.url)
 
@@ -103,6 +116,48 @@ function rewriteUrl(url) {
   }
 
   return url
+}
+
+/**
+ * Serves a file directly from the `node_modules` directory based on the requested URL.
+ *
+ * This function checks if the request URL targets a file in `node_modules`.
+ * If the file exists (after handling path adjustments like replacing `/src/` with `/dist/`
+ * and ensuring `.js` extensions), it streams the file directly to the client.
+ *
+ * @param {http.IncomingMessage} req The HTTP request object.
+ * @param {http.ServerResponse} res The HTTP response object.
+ * @return {boolean} Returns `true` if the file was served, otherwise `false`.
+ */
+function serveFileFromNodeModules(req, res) {
+  const nodeModulesPattern = /^\/node_modules\/.+/
+
+  // Base path for `node_modules`, relative to the current project root
+  const baseNodeModulesPath = path.resolve(__dirname, '../../node_modules')
+
+  // If the request targets a node_modules file, process it
+  if (nodeModulesPattern.test(req.url)) {
+    // Replace `src` with `dist` in the URL
+    const correctedUrl = req.url.replace('/src/', '/dist/')
+
+    // Ensure the file extension is `.js` for the final path
+    const jsFile = path.join(baseNodeModulesPath, correctedUrl.replace(/^\/node_modules\//, '').replace(/\.ts$/, '.js'))
+
+    // Check if the file exists
+    if (fs.existsSync(jsFile)) {
+      // Set appropriate Content-Type
+      res.setHeader('Content-Type', getContentType(jsFile))
+
+      // Stream the file to the client
+      const stream = fs.createReadStream(jsFile)
+      stream.pipe(res)
+      return true
+    } else {
+      console.warn('JS file not found:', jsFile)
+    }
+  }
+
+  return false
 }
 
 
